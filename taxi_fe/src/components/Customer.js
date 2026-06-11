@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import Button from '@mui/material/Button'
 
 import socket from '../services/taxi_socket';
@@ -11,15 +11,22 @@ function Customer(props) {
   // var bookingId = "";
   let [msg, setMsg] = useState("");
   let [pendingRequest, setPendingRequest] = useState(false);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     let channel = socket.channel("customer:" + props.username, {token: "123"});
     channel.on("greetings", data => console.log(data));
     channel.on("booking_request", data => {
       console.log("Received", data);
-      setMsg(data.msg);
-      if (data.status === "accepted" || data.status === "rejected") {
+      if (data.status === "cancelled") {
+        cancelledRef.current = true;
+        setMsg(data.msg);
         setPendingRequest(false);
+      } else if (!cancelledRef.current) {
+        setMsg(data.msg);
+        if (data.status === "accepted" || data.status === "rejected") {
+          setPendingRequest(false);
+        }
       }
     });
     channel.join();
@@ -27,6 +34,7 @@ function Customer(props) {
   }, [props.username]);
 
   let submit = () => {
+    cancelledRef.current = false;
     setPendingRequest(true);
     fetch(`http://localhost:4000/api/bookings`, {
       method: 'POST',
@@ -40,16 +48,11 @@ function Customer(props) {
   };
 
   let cancel = () => {
-    console.log(`http://localhost:4000/api/bookings/${bookingId}`);
     fetch(`http://localhost:4000/api/bookings/${bookingId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: "cancel", username: props.username })
-    }).then(resp => resp.json()).then(data => {
-      console.log(data);
-      setPendingRequest(false);
-      return setMsg(data.msg);
-    })
+    }).then(resp => resp.json()).then(data => console.log(data));
   };
 
   return (
